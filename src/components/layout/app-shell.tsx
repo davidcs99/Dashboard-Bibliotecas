@@ -10,9 +10,24 @@ type AppShellProperties = Readonly<{
 
 export function AppShell({ children }: AppShellProperties) {
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", backgroundColor: "background.default" }}>
+    <Box
+      sx={{
+        display: "flex",
+        minHeight: "100vh",
+        backgroundColor: "background.default",
+        position: "relative"
+      }}
+    >
       <DashboardSidebar />
-      <Box component="main" sx={{ flexGrow: 1, minWidth: 0 }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          minWidth: 0,
+          position: "relative",
+          ml: { lg: "280px" }
+        }}
+      >
         <DashboardTopbar />
         <Box sx={{ p: { xs: 2, md: 4 } }}>{children}</Box>
       </Box>

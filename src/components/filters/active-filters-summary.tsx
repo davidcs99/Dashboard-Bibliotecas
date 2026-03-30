@@ -37,7 +37,16 @@ export function ActiveFiltersSummary() {
   return (
     <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
       {activeFilterEntries.map((filterEntry) => (
-        <Chip key={filterEntry.key} label={filterEntry.label} />
+        <Chip
+          key={filterEntry.key}
+          label={filterEntry.label}
+          variant="outlined"
+          sx={{
+            backgroundColor: "rgba(45, 62, 89, 0.05)",
+            borderColor: "rgba(45, 62, 89, 0.18)",
+            color: "#2D3E59"
+          }}
+        />
       ))}
     </Stack>
   );

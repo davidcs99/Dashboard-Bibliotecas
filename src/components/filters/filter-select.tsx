@@ -29,10 +29,15 @@ export function FilterSelect({
         onChange={handleChange}
         input={<OutlinedInput label={label} />}
         renderValue={(selectedValues) => selectedValues.join(", ")}
+        sx={{
+          "& .MuiSelect-select": {
+            py: 1.7
+          }
+        }}
       >
         {options.map((option) => (
           <MenuItem key={option} value={option}>
-            <Checkbox checked={values.includes(option)} />
+            <Checkbox checked={values.includes(option)} sx={{ color: "primary.main" }} />
             <ListItemText primary={option} />
           </MenuItem>
         ))}

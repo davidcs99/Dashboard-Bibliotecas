@@ -10,29 +10,26 @@ export function DashboardTopbar() {
         top: 0,
         zIndex: 10,
         backdropFilter: "blur(12px)",
-        backgroundColor: "rgba(244, 246, 251, 0.88)",
+        backgroundColor: "rgba(247, 249, 252, 0.92)",
         borderBottom: "1px solid",
         borderColor: "divider",
         px: { xs: 2, md: 4 },
-        py: 2.25
+        py: 2.5
       }}
     >
       <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={2}>
         <Box sx={{ maxWidth: 760 }}>
-          <Typography variant="h5" sx={{ letterSpacing: -0.4 }}>
+          <Typography variant="overline" sx={{ color: "#991012", letterSpacing: 1.8, fontWeight: 700 }}>
+            Plataforma Institucional
+          </Typography>
+          <Typography variant="h5" sx={{ letterSpacing: -0.6, mt: 0.25 }}>
             Analitica de Bibliotecas Digitales
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, maxWidth: 680 }}>
             Dashboard institucional para analizar uso, comportamiento y aprovechamiento de recursos digitales.
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          <Chip label="Next.js" color="primary" variant="outlined" size="small" />
-          <Chip label="TypeScript" color="primary" variant="outlined" size="small" />
-          <Chip label="ECharts" color="primary" variant="outlined" size="small" />
-          <Chip label="AG Grid" color="primary" variant="outlined" size="small" />
-        </Stack>
       </Stack>
     </Box>
   );

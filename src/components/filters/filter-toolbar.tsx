@@ -40,7 +40,13 @@ export function FilterToolbar({
   } = useDashboardFiltersStore();
 
   return (
-    <Card sx={{ p: 3, mb: 4 }}>
+    <Card
+      sx={{
+        p: 3,
+        mb: 4,
+        backgroundImage: "linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(248, 250, 253, 1) 100%)"
+      }}
+    >
       <Stack
         direction={{ xs: "column", md: "row" }}
         justifyContent="space-between"
@@ -49,6 +55,9 @@ export function FilterToolbar({
         sx={{ mb: 2.5 }}
       >
         <Box>
+          <Typography variant="overline" sx={{ color: "#991012", letterSpacing: 1.5, fontWeight: 700 }}>
+            Centro de Analisis
+          </Typography>
           <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
             Filtros del Dashboard
           </Typography>
@@ -56,7 +65,11 @@ export function FilterToolbar({
             Selecciona una o varias dimensiones para refinar el análisis.
           </Typography>
         </Box>
-        <Button variant="outlined" onClick={resetFilters} sx={{ borderRadius: 999 }}>
+        <Button
+          variant="outlined"
+          onClick={resetFilters}
+          sx={{ borderRadius: 999, px: 2.4, backgroundColor: "rgba(255, 255, 255, 0.84)" }}
+        >
           Limpiar filtros
         </Button>
       </Stack>

@@ -1,16 +1,18 @@
 :root {
-  --background-primary: #f4f6fb;
+  --background-primary: #f3f5f8;
   --background-surface: #ffffff;
-  --background-subtle: #e9eef8;
-  --border-color: #d5deec;
+  --background-subtle: #e9edf4;
+  --background-sidebar: #eef2f7;
+  --border-color: #d4dbe5;
   --text-primary: #18212f;
-  --text-secondary: #58677d;
-  --accent-primary: #0b7285;
-  --accent-secondary: #106ba3;
+  --text-secondary: #5b6472;
+  --accent-primary: #2d3e59;
+  --accent-secondary: #991012;
   --success-color: #2b8a3e;
   --warning-color: #c77d00;
   --danger-color: #c92a2a;
-  --shadow-soft: 0 14px 32px rgba(24, 33, 47, 0.08);
+  --shadow-soft: 0 18px 40px rgba(24, 33, 47, 0.08);
+  --shadow-premium: 0 24px 54px rgba(24, 33, 47, 0.1);
 }
 
 * {
@@ -22,9 +24,11 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background: linear-gradient(180deg, #f7f9fc 0%, #eef3fb 100%);
+  background:
+    radial-gradient(circle at top left, rgba(65, 79, 102, 0.08), transparent 30%),
+    linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
   color: var(--text-primary);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
 }
 
 body {

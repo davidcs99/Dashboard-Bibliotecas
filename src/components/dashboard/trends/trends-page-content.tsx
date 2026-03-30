@@ -69,9 +69,9 @@ export function TrendsPageContent() {
             data={operationTrendByYear}
             categoryKey="year"
             seriesDefinitions={[
-              { key: "search", name: "SEARCH", color: "#0b7285" },
-              { key: "loginSuccess", name: "LOGIN-SUCCESS", color: "#f08c00" },
-              { key: "url", name: "URL", color: "#106ba3" }
+              { key: "search", name: "SEARCH", color: "#991012" },
+              { key: "loginSuccess", name: "LOGIN-SUCCESS", color: "#E66C37" },
+              { key: "url", name: "URL", color: "#118DFF" }
             ]}
           />
         </Box>

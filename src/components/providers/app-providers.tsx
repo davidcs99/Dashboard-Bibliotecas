@@ -12,50 +12,100 @@ const applicationTheme = createTheme({
   palette: {
     mode: "light",
     primary: {
-      main: "#0b7285"
+      main: "#2D3E59"
     },
     secondary: {
-      main: "#106ba3"
+      main: "#991012"
+    },
+    text: {
+      primary: "#18212f",
+      secondary: "#5b6472"
     },
     background: {
-      default: "#f4f6fb",
+      default: "#f3f5f8",
       paper: "#ffffff"
-    }
+    },
+    divider: "#d4dbe5"
   },
   shape: {
-    borderRadius: 18
+    borderRadius: 22
   },
   typography: {
-    fontFamily: "Arial, Helvetica, sans-serif",
+    fontFamily: "\"Aptos\", \"Segoe UI\", \"Helvetica Neue\", sans-serif",
     body1: {
-      lineHeight: 1.6
+      lineHeight: 1.65
     },
     body2: {
-      lineHeight: 1.55
+      lineHeight: 1.6
     },
     h4: {
-      fontWeight: 800
+      fontWeight: 800,
+      letterSpacing: -1
     },
     h5: {
-      fontWeight: 800
+      fontWeight: 800,
+      letterSpacing: -0.7
     },
     h6: {
-      fontWeight: 800
+      fontWeight: 800,
+      letterSpacing: -0.45
+    },
+    subtitle1: {
+      fontWeight: 700
     }
   },
   components: {
     MuiCard: {
       styleOverrides: {
         root: {
-          boxShadow: "0 16px 40px rgba(24, 33, 47, 0.08)",
-          border: "1px solid rgba(213, 222, 236, 0.9)"
+          boxShadow: "var(--shadow-soft)",
+          border: "1px solid rgba(212, 219, 229, 0.95)",
+          backgroundImage: "linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(248, 250, 253, 1) 100%)"
         }
       }
     },
     MuiCardContent: {
       styleOverrides: {
         root: {
-          padding: 24
+          padding: 28
+        }
+      }
+    },
+    MuiButton: {
+      defaultProps: {
+        disableElevation: true
+      },
+      styleOverrides: {
+        root: {
+          textTransform: "none",
+          fontWeight: 700,
+          borderRadius: 999
+        },
+        outlined: {
+          borderColor: "rgba(45, 62, 89, 0.22)"
+        }
+      }
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 999,
+          fontWeight: 600
+        }
+      }
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          backgroundColor: "rgba(255, 255, 255, 0.92)",
+          borderRadius: 18
+        }
+      }
+    },
+    MuiListItemButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16
         }
       }
     }

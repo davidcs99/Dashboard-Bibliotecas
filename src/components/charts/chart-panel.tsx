@@ -22,11 +22,24 @@ export function ChartPanel({
   chartHeight = 360
 }: ChartPanelProperties) {
   return (
-    <Card sx={{ height: "100%" }}>
+    <Card
+      sx={{
+        height: "100%",
+        overflow: "hidden",
+        position: "relative",
+        "&::before": {
+          content: "\"\"",
+          position: "absolute",
+          inset: 0,
+          background: "linear-gradient(180deg, rgba(45, 62, 89, 0.03) 0%, transparent 22%)",
+          pointerEvents: "none"
+        }
+      }}
+    >
       <CardContent>
         <Stack spacing={2.5}>
           <div>
-            <Typography variant="h6" sx={{ mb: 0.75, letterSpacing: -0.4 }}>
+            <Typography variant="h6" sx={{ mb: 0.75, letterSpacing: -0.45 }}>
               {title}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 760 }}>

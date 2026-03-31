@@ -423,8 +423,9 @@ export function buildScatterChartOptions(data: ScatterChartDatum[]): EChartsOpti
     color: chartPalette,
     tooltip: {
       trigger: "item",
-      formatter: (parameters: { data?: unknown }) => {
-        const scatterData = Array.isArray(parameters.data) ? parameters.data : [];
+      formatter: (parameters) => {
+        const tooltipParameters = Array.isArray(parameters) ? parameters[0] : parameters;
+        const scatterData = Array.isArray(tooltipParameters?.data) ? tooltipParameters.data : [];
         const users = Number(scatterData[0] ?? 0);
         const resourceAccesses = Number(scatterData[1] ?? 0);
         const name = String(scatterData[2] ?? "");

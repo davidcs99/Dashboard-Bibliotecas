@@ -10,6 +10,7 @@ const filterLabelByKey = {
   academicUnits: "Unidad academica",
   programs: "Carrera",
   modalities: "Modalidad",
+  accessTypes: "Tipo de acceso",
   roles: "Cargo",
   resources: "Recurso",
   resourceTypes: "Tipo de recurso",

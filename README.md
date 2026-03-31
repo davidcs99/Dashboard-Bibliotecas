@@ -20,6 +20,37 @@ npm install
 npm run dev
 ```
 
+## Despliegue con Docker
+
+Se agrego una base de despliegue productivo usando:
+
+- `Dockerfile`
+- `docker-compose.prod.yml`
+- `deploy-production.sh`
+
+Flujo recomendado:
+
+```bash
+chmod +x deploy-production.sh
+./deploy-production.sh
+```
+
+Antes del primer despliegue:
+
+- Ajusta `USER`, `SERVER` y `REMOTE_PATH` dentro de `deploy-production.sh`
+- Confirma que `biblio_datos_limpios.csv` este presente en el proyecto
+
+La estrategia actual:
+
+- envia codigo fuente al servidor con `rsync`
+- construye la imagen completamente en el servidor
+- usa `docker build --network=host` para ayudar con conectividad durante el build
+- usa un nombre fijo de imagen: `dashboard-bibliotecas-app:latest`
+- expone la app en `http://SERVIDOR:3001`
+- levanta un contenedor `cloudflared` para obtener un enlace publico
+- monta `biblio_datos_limpios.csv` como volumen
+- persiste `.cache` fuera del contenedor para acelerar recalculos
+
 ## Nota del entorno actual
 
 En este entorno no fue posible ejecutar `node` ni `npm`, por lo que la validacion automatica local no se pudo correr todavia. La estructura y configuracion quedaron preparadas para instalar dependencias y continuar con el desarrollo en cuanto el entorno de Node.js este disponible.

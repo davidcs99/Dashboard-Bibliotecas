@@ -1,0 +1,22 @@
+services:
+  dashboard-app:
+    container_name: dashboard-bibliotecas-app
+    image: dashboard-bibliotecas-app:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    volumes:
+      - ./biblio_datos_limpios.csv:/app/biblio_datos_limpios.csv:ro
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: dashboard-bibliotecas-tunnel
+    network_mode: host
+    command: tunnel --url http://localhost:3001
+    restart: unless-stopped
+    depends_on:
+      - dashboard-app

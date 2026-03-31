@@ -8,6 +8,7 @@ type DashboardFiltersState = {
   selectedAcademicUnits: string[];
   selectedPrograms: string[];
   selectedModalities: string[];
+  selectedAccessTypes: string[];
   selectedRoles: string[];
   selectedResources: string[];
   selectedResourceTypes: string[];
@@ -18,6 +19,7 @@ type DashboardFiltersState = {
   setSelectedAcademicUnits: (selectedAcademicUnits: string[]) => void;
   setSelectedPrograms: (selectedPrograms: string[]) => void;
   setSelectedModalities: (selectedModalities: string[]) => void;
+  setSelectedAccessTypes: (selectedAccessTypes: string[]) => void;
   setSelectedRoles: (selectedRoles: string[]) => void;
   setSelectedResources: (selectedResources: string[]) => void;
   setSelectedResourceTypes: (selectedResourceTypes: string[]) => void;
@@ -33,6 +35,7 @@ const initialDashboardFiltersState = {
   selectedAcademicUnits: [],
   selectedPrograms: [],
   selectedModalities: [],
+  selectedAccessTypes: [],
   selectedRoles: [],
   selectedResources: [],
   selectedResourceTypes: [],
@@ -47,6 +50,7 @@ export const useDashboardFiltersStore = create<DashboardFiltersState>((set) => (
   setSelectedAcademicUnits: (selectedAcademicUnits) => set({ selectedAcademicUnits }),
   setSelectedPrograms: (selectedPrograms) => set({ selectedPrograms }),
   setSelectedModalities: (selectedModalities) => set({ selectedModalities }),
+  setSelectedAccessTypes: (selectedAccessTypes) => set({ selectedAccessTypes }),
   setSelectedRoles: (selectedRoles) => set({ selectedRoles }),
   setSelectedResources: (selectedResources) => set({ selectedResources }),
   setSelectedResourceTypes: (selectedResourceTypes) => set({ selectedResourceTypes }),
@@ -59,6 +63,7 @@ export const useDashboardFiltersStore = create<DashboardFiltersState>((set) => (
       selectedAcademicUnits: filters.academicUnits,
       selectedPrograms: filters.programs,
       selectedModalities: filters.modalities,
+      selectedAccessTypes: filters.accessTypes,
       selectedRoles: filters.roles,
       selectedResources: filters.resources,
       selectedResourceTypes: filters.resourceTypes,

@@ -61,6 +61,7 @@ export type DashboardFilterOptions = {
   academicUnits: string[];
   programs: string[];
   modalities: string[];
+  accessTypes: string[];
   roles: string[];
   resources: string[];
   resourceTypes: string[];
@@ -74,6 +75,7 @@ export type DashboardQueryFilters = {
   academicUnits: string[];
   programs: string[];
   modalities: string[];
+  accessTypes: string[];
   roles: string[];
   resources: string[];
   resourceTypes: string[];

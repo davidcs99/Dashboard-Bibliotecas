@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Chip, Stack, Typography } from "@mui/material";
+import { Box, Stack, Typography } from "@mui/material";
 
 export function DashboardTopbar() {
   return (

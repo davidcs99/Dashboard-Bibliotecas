@@ -23,6 +23,7 @@ type LibraryUsageRecord = {
   cargo: string;
   carrera: string;
   modalidad: string;
+  tipoAcceso: string;
   ua: string;
   sede: string;
   operacion: string;
@@ -59,7 +60,7 @@ let cachedDatasetPromise: Promise<DatasetCache> | null = null;
 
 const analyticsCacheDirectoryPath = path.join(process.cwd(), ".cache");
 const analyticsCacheFilePath = path.join(analyticsCacheDirectoryPath, "dashboard-analytics.json");
-const analyticsCacheSchemaVersion = 3;
+const analyticsCacheSchemaVersion = 4;
 const csvFilePath = path.join(process.cwd(), "biblio_datos_limpios.csv");
 
 const monthLabelByNumber = new Map<string, string>([
@@ -178,6 +179,7 @@ function aggregateDashboardAnalytics(
   const academicUnitOptions = new Set<string>();
   const programOptions = new Set<string>();
   const modalityOptions = new Set<string>();
+  const accessTypeOptions = new Set<string>();
   const roleOptions = new Set<string>();
   const resourceOptions = new Set<string>();
   const resourceTypeOptions = new Set<string>();
@@ -209,6 +211,7 @@ function aggregateDashboardAnalytics(
     const academicUnit = record.ua;
     const program = record.carrera;
     const modality = record.modalidad;
+    const accessType = record.tipoAcceso;
     const campus = record.sede;
     const operation = record.operacion;
     const searchTerm = record.busqueda;
@@ -227,6 +230,7 @@ function aggregateDashboardAnalytics(
     addOption(academicUnitOptions, academicUnit);
     addOption(programOptions, program);
     addOption(modalityOptions, modality);
+    addOption(accessTypeOptions, accessType);
     addOption(roleOptions, role);
     addOption(resourceOptions, resource);
     addOption(resourceTypeOptions, resourceType);
@@ -306,6 +310,7 @@ function aggregateDashboardAnalytics(
       academicUnits: sortByCountThenLabel(usageByAcademicUnit).map((item) => item.label),
       programs: sortByCountThenLabel(usageByProgram).map((item) => item.label),
       modalities: sortLexicographically([...modalityOptions]),
+      accessTypes: sortLexicographically([...accessTypeOptions]),
       roles: sortByCountThenLabel(usageByRole).map((item) => item.label),
       resources: sortByCountThenLabel(topResources).map((item) => item.label),
       resourceTypes: sortByCountThenLabel(resourceTypeDistribution).map((item) => item.label),
@@ -354,6 +359,7 @@ function matchesDashboardFilters(
     matchesFilterValues(record.ua, filters.academicUnits) &&
     matchesFilterValues(record.carrera, filters.programs) &&
     matchesFilterValues(record.modalidad, filters.modalities) &&
+    matchesFilterValues(record.tipoAcceso, filters.accessTypes) &&
     matchesFilterValues(record.cargo, filters.roles) &&
     matchesFilterValues(record.recurso, filters.resources) &&
     matchesFilterValues(record.tipoRecurso, filters.resourceTypes) &&
@@ -433,6 +439,7 @@ async function readCsvRecords(filePath: string): Promise<LibraryUsageRecord[]> {
       cargo: sanitizeField(recordByHeader.cargo ?? "", "Sin cargo"),
       carrera: sanitizeField(recordByHeader.carrera ?? "", "Sin carrera"),
       modalidad: sanitizeField(recordByHeader.modalidad ?? "", "Sin modalidad"),
+      tipoAcceso: sanitizeField(recordByHeader.tipo_acceso ?? "", "Sin tipo de acceso"),
       ua: sanitizeField(recordByHeader.ua ?? "", "Sin unidad academica"),
       sede: sanitizeField(recordByHeader.sede ?? "", "Sin sede"),
       operacion: sanitizeField(recordByHeader.operacion ?? "", "Sin operacion"),

@@ -12,6 +12,7 @@ export function useDashboardQueryFilters() {
       academicUnits: state.selectedAcademicUnits,
       programs: state.selectedPrograms,
       modalities: state.selectedModalities,
+      accessTypes: state.selectedAccessTypes,
       roles: state.selectedRoles,
       resources: state.selectedResources,
       resourceTypes: state.selectedResourceTypes,

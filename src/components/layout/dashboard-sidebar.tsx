@@ -9,7 +9,7 @@ import ManageSearchOutlinedIcon from "@mui/icons-material/ManageSearchOutlined";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import QueryStatsOutlinedIcon from "@mui/icons-material/QueryStatsOutlined";
 import VerifiedUserOutlinedIcon from "@mui/icons-material/VerifiedUserOutlined";
-import { Box, Divider, List, ListItemButton, ListItemIcon, ListItemText, Typography } from "@mui/material";
+import { Box, List, ListItemButton, ListItemIcon, ListItemText, Typography } from "@mui/material";
 import { dashboardNavigationItems } from "@/lib/navigation/dashboard-navigation-items";
 import { useDashboardFiltersStore } from "@/store/use-dashboard-filters-store";
 

@@ -22,6 +22,7 @@ export function FilterToolbar({
     selectedAcademicUnits,
     selectedPrograms,
     selectedModalities,
+    selectedAccessTypes,
     selectedRoles,
     selectedResources,
     selectedResourceTypes,
@@ -32,6 +33,7 @@ export function FilterToolbar({
     setSelectedAcademicUnits,
     setSelectedPrograms,
     setSelectedModalities,
+    setSelectedAccessTypes,
     setSelectedRoles,
     setSelectedResources,
     setSelectedResourceTypes,
@@ -119,6 +121,14 @@ export function FilterToolbar({
             values={selectedModalities}
             options={filterOptions.modalities}
             onChange={setSelectedModalities}
+          />
+        </Box>
+        <Box>
+          <FilterSelect
+            label="Tipo de acceso"
+            values={selectedAccessTypes}
+            options={filterOptions.accessTypes}
+            onChange={setSelectedAccessTypes}
           />
         </Box>
         <Box>

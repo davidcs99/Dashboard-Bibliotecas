@@ -25,6 +25,7 @@ rsync -avz \
   --exclude 'node_modules' \
   --exclude '.next' \
   --exclude '.git' \
+  --exclude '.gitignore' \
   --exclude '.cache' \
   . "$USER@$SERVER:$REMOTE_PATH"
 

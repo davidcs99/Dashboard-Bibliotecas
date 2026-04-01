@@ -28,7 +28,7 @@ rsync -avz \
   --exclude '.gitignore' \
   --exclude '.cache' \
   . "$USER@$SERVER:$REMOTE_PATH"
-
+ 
 echo "Conectando al servidor para construir y ejecutar..."
 ssh "$USER@$SERVER" << EOF
   set -euo pipefail

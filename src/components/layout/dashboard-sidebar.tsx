@@ -56,7 +56,7 @@ export function DashboardSidebar() {
             display: "flex",
             justifyContent: "flex-start",
             alignItems: "center",
-            mb: 2.5,
+            mb: 1.25,
             minHeight: 64
           }}
         >
@@ -69,6 +69,17 @@ export function DashboardSidebar() {
             priority
           />
         </Box>
+        <Typography
+          variant="body2"
+          sx={{
+            mb: 2,
+            color: "rgba(255, 255, 255, 0.78)",
+            fontWeight: 600,
+            letterSpacing: 0.2
+          }}
+        >
+          Jefatura de Análisis de Datos
+        </Typography>
         <Typography
           variant="h5"
           sx={{

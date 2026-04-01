@@ -91,7 +91,7 @@ export function FilterToolbar({
         }}
       >
         <Box>
-          <FilterSelect label="Anio" values={selectedYears} options={filterOptions.years} onChange={setSelectedYears} />
+          <FilterSelect label="Año" values={selectedYears} options={filterOptions.years} onChange={setSelectedYears} />
         </Box>
         <Box>
           <FilterSelect label="Mes" values={selectedMonths} options={filterOptions.months} onChange={setSelectedMonths} />

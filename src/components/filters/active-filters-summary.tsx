@@ -4,7 +4,7 @@ import { Chip, Stack, Typography } from "@mui/material";
 import { useDashboardQueryFilters } from "@/hooks/use-dashboard-query-filters";
 
 const filterLabelByKey = {
-  years: "Anio",
+  years: "Año",
   months: "Mes",
   campuses: "Sede",
   academicUnits: "Unidad academica",

@@ -60,22 +60,22 @@ let cachedDatasetPromise: Promise<DatasetCache> | null = null;
 
 const analyticsCacheDirectoryPath = path.join(process.cwd(), ".cache");
 const analyticsCacheFilePath = path.join(analyticsCacheDirectoryPath, "dashboard-analytics.json");
-const analyticsCacheSchemaVersion = 4;
+const analyticsCacheSchemaVersion = 3;
 const csvFilePath = path.join(process.cwd(), "biblio_datos_limpios.csv");
 
 const monthLabelByNumber = new Map<string, string>([
-  ["01", "01 - Enero"],
-  ["02", "02 - Febrero"],
-  ["03", "03 - Marzo"],
-  ["04", "04 - Abril"],
-  ["05", "05 - Mayo"],
-  ["06", "06 - Junio"],
-  ["07", "07 - Julio"],
-  ["08", "08 - Agosto"],
-  ["09", "09 - Septiembre"],
-  ["10", "10 - Octubre"],
-  ["11", "11 - Noviembre"],
-  ["12", "12 - Diciembre"]
+  ["01", "01 - ENERO"],
+  ["02", "02 - FEBRERO"],
+  ["03", "03 - MARZO"],
+  ["04", "04 - ABRIL"],
+  ["05", "05 - MAYO"],
+  ["06", "06 - JUNIO"],
+  ["07", "07 - JULIO"],
+  ["08", "08 - AGOSTO"],
+  ["09", "09 - SEPTIEMBRE"],
+  ["10", "10 - OCTUBRE"],
+  ["11", "11 - NOVIEMBRE"],
+  ["12", "12 - DICIEMBRE"]
 ]);
 
 export async function getDashboardAnalytics(
@@ -218,7 +218,7 @@ function aggregateDashboardAnalytics(
     const resource = record.recurso;
     const resourceType = record.tipoRecurso;
     const year = record.anio;
-    const monthKey = year && record.mes ? `${year}-${record.mes}` : "Sin fecha";
+    const monthKey = year && record.mes ? `${year}-${record.mes}` : "SIN FECHA";
 
     if (identification) {
       uniqueUsers.add(identification);
@@ -306,14 +306,16 @@ function aggregateDashboardAnalytics(
     {
       years: sortLexicographically([...yearOptions]),
       months: sortLexicographically([...monthOptions]),
-      campuses: sortByCountThenLabel(usageByCampus).map((item) => item.label),
-      academicUnits: sortByCountThenLabel(usageByAcademicUnit).map((item) => item.label),
-      programs: sortByCountThenLabel(usageByProgram).map((item) => item.label),
+      campuses: sortMapLabelsAlphabetically(usageByCampus),
+      academicUnits: sortMapLabelsAlphabetically(usageByAcademicUnit),
+      programs: sortMapLabelsAlphabetically(usageByProgram),
       modalities: sortLexicographically([...modalityOptions]),
-      accessTypes: sortLexicographically([...accessTypeOptions]),
-      roles: sortByCountThenLabel(usageByRole).map((item) => item.label),
-      resources: sortByCountThenLabel(topResources).map((item) => item.label),
-      resourceTypes: sortByCountThenLabel(resourceTypeDistribution).map((item) => item.label),
+      accessTypes: sortLexicographically([...accessTypeOptions]).filter(
+        (accessType) => accessType !== "SIN TIPO DE ACCESO"
+      ),
+      roles: sortMapLabelsAlphabetically(usageByRole),
+      resources: sortMapLabelsAlphabetically(topResources),
+      resourceTypes: sortMapLabelsAlphabetically(resourceTypeDistribution),
       users: buildUserOptions(userAccumulators)
     };
 
@@ -436,16 +438,16 @@ async function readCsvRecords(filePath: string): Promise<LibraryUsageRecord[]> {
       fecha: sanitizeField(recordByHeader.fecha ?? ""),
       identificacion: identification,
       nombre: fullName,
-      cargo: sanitizeField(recordByHeader.cargo ?? "", "Sin cargo"),
-      carrera: sanitizeField(recordByHeader.carrera ?? "", "Sin carrera"),
-      modalidad: sanitizeField(recordByHeader.modalidad ?? "", "Sin modalidad"),
-      tipoAcceso: sanitizeField(recordByHeader.tipo_acceso ?? "", "Sin tipo de acceso"),
-      ua: sanitizeField(recordByHeader.ua ?? "", "Sin unidad academica"),
-      sede: sanitizeField(recordByHeader.sede ?? "", "Sin sede"),
-      operacion: sanitizeField(recordByHeader.operacion ?? "", "Sin operacion"),
+      cargo: sanitizeField(recordByHeader.cargo ?? "", "SIN CARGO"),
+      carrera: sanitizeField(recordByHeader.carrera ?? "", "SIN CARRERA"),
+      modalidad: sanitizeField(recordByHeader.modalidad ?? "", "SIN MODALIDAD"),
+      tipoAcceso: sanitizeField(recordByHeader.tipo_acceso ?? "", "SIN TIPO DE ACCESO"),
+      ua: sanitizeField(recordByHeader.ua ?? "", "SIN UNIDAD ACADEMICA"),
+      sede: sanitizeField(recordByHeader.sede ?? "", "SIN SEDE"),
+      operacion: sanitizeField(recordByHeader.operacion ?? "", "SIN OPERACION"),
       busqueda: sanitizeField(recordByHeader.busqueda ?? ""),
-      recurso: sanitizeField(recordByHeader.recurso ?? "", "Sin recurso"),
-      tipoRecurso: sanitizeField(recordByHeader.tiporecurso ?? "", "Sin tipo de recurso"),
+      recurso: sanitizeField(recordByHeader.recurso ?? "", "SIN RECURSO"),
+      tipoRecurso: sanitizeField(recordByHeader.tiporecurso ?? "", "SIN TIPO DE RECURSO"),
       anio: year,
       mes: month,
       monthLabel,
@@ -683,7 +685,7 @@ function takeTop<TItem>(items: TItem[], topCount: number): TItem[] {
 
 function takeBottom<TItem extends CategoryMetric>(items: TItem[], bottomCount: number): TItem[] {
   return [...items]
-    .filter((item) => item.label !== "Sin recurso")
+    .filter((item) => item.label !== "SIN RECURSO")
     .reverse()
     .slice(0, bottomCount)
     .reverse();
@@ -691,6 +693,10 @@ function takeBottom<TItem extends CategoryMetric>(items: TItem[], bottomCount: n
 
 function sortLexicographically(values: string[]): string[] {
   return [...values].sort((leftValue, rightValue) => leftValue.localeCompare(rightValue, "es"));
+}
+
+function sortMapLabelsAlphabetically(counterMap: Map<string, number>): string[] {
+  return sortLexicographically([...counterMap.keys()]);
 }
 
 function addOption(optionSet: Set<string>, value: string): void {
@@ -704,7 +710,7 @@ function accumulateResourceUsageByPrimaryRole(
   resource: string,
   role: string
 ): void {
-  if (!resource || resource === "Sin recurso") {
+  if (!resource || resource === "SIN RECURSO") {
     return;
   }
 

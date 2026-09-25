@@ -1,20 +1,64 @@
-import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { emptyDashboardQueryFilters, hasActiveDashboardFilters } from "@/lib/dashboard-filters";
-import { formatDecimal, formatInteger } from "@/lib/utils/formatters";
+import { getSqlPool } from "@/lib/server/sql-client";
+import { getRedisClient } from "@/lib/server/redis-client";
+import {
+  addOption,
+  addToSetMap,
+  buildAcademicUnitScatterMetrics,
+  buildResourceUsageByPrimaryRoles,
+  buildSummaryKpis,
+  buildUniqueUserMetrics,
+  incrementMapCounter,
+  monthLabelByNumber,
+  sortByCountThenLabel,
+  sortLexicographically,
+  sortMapLabelsAlphabetically,
+  sortMonthlyMetrics,
+  sortOperationTrendMetrics,
+  sortOperationYearMetrics,
+  takeBottom,
+  takeTop,
+  accumulateResourceUsageByPrimaryRole
+} from "@/lib/server/dashboard-analytics-shaping";
+import {
+  getFilterOptionsFromSql,
+  getMonitoringMetricsFromSql,
+  getMonthlyUsageTrendFromSql,
+  getResourcesMetricsFromSql,
+  getSearchesMetricsFromSql,
+  getSummaryMetricsFromSql,
+  getTrendsMetricsFromSql,
+  getUsersMetricsFromSql
+} from "@/lib/server/dashboard-sql-repository";
+import {
+  selectFiltersResponse,
+  selectMonitoringResponse,
+  selectResourcesResponse,
+  selectSearchesResponse,
+  selectSummaryResponse,
+  selectTrendsResponse,
+  selectUsersResponse
+} from "@/lib/server/dashboard-api-selectors";
 import type {
-  CategoryMetric,
   DashboardAnalytics,
   DashboardFilterOptions,
   DashboardQueryFilters,
-  KpiMetric,
-  MonthlyMetric,
   OperationYearMetric,
   OperationTrendMetric,
   ResourceUsageByRoleMetric,
-  ScatterMetric,
   UserMonitoringRow
 } from "@/types/dashboard";
+import type {
+  FiltersApiResponse,
+  MonitoringApiResponse,
+  ResourcesApiResponse,
+  SearchesApiResponse,
+  SummaryApiResponse,
+  TrendsApiResponse,
+  UsersApiResponse
+} from "@/types/api";
 
 type LibraryUsageRecord = {
   fecha: string;
@@ -51,36 +95,26 @@ type UserAccumulator = {
 };
 
 type DatasetCache = {
-  csvLastModifiedTimeMs: number;
+  datasetVersion: string;
   records: LibraryUsageRecord[];
 };
 
 let cachedBaseAnalyticsPromise: Promise<DashboardAnalytics> | null = null;
 let cachedDatasetPromise: Promise<DatasetCache> | null = null;
 
-const analyticsCacheDirectoryPath = path.join(process.cwd(), ".cache");
-const analyticsCacheFilePath = path.join(analyticsCacheDirectoryPath, "dashboard-analytics.json");
-const analyticsCacheSchemaVersion = 3;
+const analyticsCacheRedisKey = "dashboard:analytics";
+const analyticsCacheSchemaVersion = 4;
 const csvFilePath = path.join(process.cwd(), "biblio_datos_limpios.csv");
-
-const monthLabelByNumber = new Map<string, string>([
-  ["01", "01 - ENERO"],
-  ["02", "02 - FEBRERO"],
-  ["03", "03 - MARZO"],
-  ["04", "04 - ABRIL"],
-  ["05", "05 - MAYO"],
-  ["06", "06 - JUNIO"],
-  ["07", "07 - JULIO"],
-  ["08", "08 - AGOSTO"],
-  ["09", "09 - SEPTIEMBRE"],
-  ["10", "10 - OCTUBRE"],
-  ["11", "11 - NOVIEMBRE"],
-  ["12", "12 - DICIEMBRE"]
-]);
+const dataSource = process.env.DATA_SOURCE === "sql" ? "sql" : "csv";
+const filteredMetricsCacheTtlSeconds = 900;
 
 export async function getDashboardAnalytics(
   filters: DashboardQueryFilters = emptyDashboardQueryFilters
 ): Promise<DashboardAnalytics> {
+  if (dataSource === "sql") {
+    return getDashboardAnalyticsFromSql(filters);
+  }
+
   if (!hasActiveDashboardFilters(filters)) {
     return getBaseDashboardAnalytics();
   }
@@ -97,6 +131,257 @@ export async function getDashboardAnalytics(
   return aggregateDashboardAnalytics(filteredRecords, baseDashboardAnalytics.filterOptions);
 }
 
+async function getDashboardAnalyticsFromSql(filters: DashboardQueryFilters): Promise<DashboardAnalytics> {
+  const baseDashboardAnalytics = await getBaseDashboardAnalyticsSql();
+
+  if (!hasActiveDashboardFilters(filters)) {
+    return baseDashboardAnalytics;
+  }
+
+  return buildDashboardAnalyticsFromSql(filters, baseDashboardAnalytics.filterOptions);
+}
+
+async function getBaseDashboardAnalyticsSql(): Promise<DashboardAnalytics> {
+  if (!cachedBaseAnalyticsPromise) {
+    cachedBaseAnalyticsPromise = buildBaseDashboardAnalyticsSql().catch((error) => {
+      cachedBaseAnalyticsPromise = null;
+      throw error;
+    });
+  }
+
+  return cachedBaseAnalyticsPromise;
+}
+
+async function buildBaseDashboardAnalyticsSql(): Promise<DashboardAnalytics> {
+  const [currentDatasetVersion, cachedAnalytics] = await Promise.all([
+    getCurrentDatasetVersion(),
+    readAnalyticsFromPersistentCache()
+  ]);
+
+  if (
+    cachedAnalytics &&
+    cachedAnalytics.cacheSchemaVersion === analyticsCacheSchemaVersion &&
+    cachedAnalytics.datasetVersion === currentDatasetVersion &&
+    isDashboardAnalyticsCacheComplete(cachedAnalytics.dashboardAnalytics)
+  ) {
+    return cachedAnalytics.dashboardAnalytics;
+  }
+
+  const dashboardAnalytics = await buildDashboardAnalyticsFromSql(emptyDashboardQueryFilters);
+  await writeAnalyticsToPersistentCache(currentDatasetVersion, dashboardAnalytics);
+
+  return dashboardAnalytics;
+}
+
+async function buildDashboardAnalyticsFromSql(
+  filters: DashboardQueryFilters,
+  sharedFilterOptions?: DashboardFilterOptions
+): Promise<DashboardAnalytics> {
+  const [filterOptions, summary, resources, users, trends, searches, monitoring] = await Promise.all([
+    sharedFilterOptions ? Promise.resolve(sharedFilterOptions) : getFilterOptionsFromSql(),
+    getSummaryMetricsFromSql(filters),
+    getResourcesMetricsFromSql(filters),
+    getUsersMetricsFromSql(filters),
+    getTrendsMetricsFromSql(filters),
+    getSearchesMetricsFromSql(filters),
+    getMonitoringMetricsFromSql(filters)
+  ]);
+
+  return {
+    filterOptions,
+    summaryKpis: summary.summaryKpis,
+    monthlyUsageTrend: summary.monthlyUsageTrend,
+    usageByCampus: summary.usageByCampus,
+    usageByRole: summary.usageByRole,
+    topResources: resources.topResources,
+    leastUsedResources: resources.leastUsedResources,
+    resourceUsageByPrimaryRoles: resources.resourceUsageByPrimaryRoles,
+    resourceTypeDistribution: resources.resourceTypeDistribution,
+    uniqueUsersByResource: resources.uniqueUsersByResource,
+    usageByAcademicUnit: users.usageByAcademicUnit,
+    usageByProgram: users.usageByProgram,
+    usersVsEventsByAcademicUnit: users.usersVsEventsByAcademicUnit,
+    dailyPeakUsage: trends.dailyPeakUsage,
+    operationTrend: trends.operationTrend,
+    operationTrendByYear: trends.operationTrendByYear,
+    topSearchTerms: searches.topSearchTerms,
+    searchVolumeByCampus: searches.searchVolumeByCampus,
+    monitoringUsers: monitoring.monitoringUsers
+  };
+}
+
+async function getSqlFilterOptions(): Promise<DashboardFilterOptions> {
+  return (await getBaseDashboardAnalyticsSql()).filterOptions;
+}
+
+/**
+ * Cache-aside con TTL para consultas SQL filtradas. A diferencia de la cache
+ * base (invalidada con precisión contra ETL_Control_Carga), acá no vale la
+ * pena rastrear la versión exacta del dataset para cada combinación posible
+ * de filtros -- son demasiadas. Con un TTL simple, la combinación de filtros
+ * que alguien ya consultó responde instantáneo durante los próximos minutos
+ * (útil si varias personas miran el mismo año/sede), a costa de que ese
+ * resultado pueda quedar unos minutos desactualizado tras una carga del ETL.
+ * Si Redis falla, se sigue de largo con la consulta en vivo (best-effort).
+ */
+async function getCachedFilteredMetrics<TMetrics>(
+  groupName: string,
+  filters: DashboardQueryFilters,
+  compute: () => Promise<TMetrics>
+): Promise<TMetrics> {
+  const cacheKey = buildFilteredMetricsCacheKey(groupName, filters);
+
+  try {
+    const cachedValue = await getRedisClient().get(cacheKey);
+    if (cachedValue) {
+      return JSON.parse(cachedValue) as TMetrics;
+    }
+  } catch {
+    // seguimos con la consulta en vivo si Redis no responde
+  }
+
+  const metrics = await compute();
+
+  try {
+    await getRedisClient().set(cacheKey, JSON.stringify(metrics), "EX", filteredMetricsCacheTtlSeconds);
+  } catch {
+    // cache best-effort: si falla el SET, la respuesta ya se calculó igual
+  }
+
+  return metrics;
+}
+
+function buildFilteredMetricsCacheKey(groupName: string, filters: DashboardQueryFilters): string {
+  const normalizedFilters = Object.fromEntries(
+    (Object.keys(filters) as Array<keyof DashboardQueryFilters>)
+      .sort()
+      .map((key) => [key, [...filters[key]].sort()])
+  );
+
+  return `dashboard:filtered:${groupName}:${JSON.stringify(normalizedFilters)}`;
+}
+
+/**
+ * Una función por endpoint. En modo SQL:
+ * - Sin filtros activos (el caso común al navegar entre secciones): reusa
+ *   el DashboardAnalytics base ya cacheado (Redis + memoria), sin tocar SQL.
+ * - Con filtros activos: usa la cache de filtros (TTL) o, si no está, consulta
+ *   en vivo solo el grupo de métricas que la ruta necesita -- eso fue lo que
+ *   hacía /api/dashboard/summary tardar 35s trayendo también seguimiento y
+ *   búsquedas sin usarlas.
+ * En modo CSV, agregar todo sigue siendo barato (loop en memoria), así que
+ * se reutiliza getDashboardAnalytics tal cual en ambos casos.
+ */
+export async function getFiltersDashboardData(): Promise<FiltersApiResponse> {
+  if (dataSource === "sql") {
+    return { filterOptions: await getSqlFilterOptions() };
+  }
+
+  return selectFiltersResponse(await getDashboardAnalytics());
+}
+
+export async function getSummaryDashboardData(filters: DashboardQueryFilters): Promise<SummaryApiResponse> {
+  if (dataSource === "sql") {
+    if (!hasActiveDashboardFilters(filters)) {
+      return selectSummaryResponse(await getBaseDashboardAnalyticsSql());
+    }
+
+    const [filterOptions, summary] = await Promise.all([
+      getSqlFilterOptions(),
+      getCachedFilteredMetrics("summary", filters, () => getSummaryMetricsFromSql(filters))
+    ]);
+    return { filterOptions, ...summary };
+  }
+
+  return selectSummaryResponse(await getDashboardAnalytics(filters));
+}
+
+export async function getResourcesDashboardData(filters: DashboardQueryFilters): Promise<ResourcesApiResponse> {
+  if (dataSource === "sql") {
+    if (!hasActiveDashboardFilters(filters)) {
+      return selectResourcesResponse(await getBaseDashboardAnalyticsSql());
+    }
+
+    const [filterOptions, resources] = await Promise.all([
+      getSqlFilterOptions(),
+      getCachedFilteredMetrics("resources", filters, () => getResourcesMetricsFromSql(filters))
+    ]);
+    return { filterOptions, ...resources };
+  }
+
+  return selectResourcesResponse(await getDashboardAnalytics(filters));
+}
+
+export async function getUsersDashboardData(filters: DashboardQueryFilters): Promise<UsersApiResponse> {
+  if (dataSource === "sql") {
+    if (!hasActiveDashboardFilters(filters)) {
+      return selectUsersResponse(await getBaseDashboardAnalyticsSql());
+    }
+
+    const [filterOptions, users] = await Promise.all([
+      getSqlFilterOptions(),
+      getCachedFilteredMetrics("users", filters, () => getUsersMetricsFromSql(filters))
+    ]);
+    return { filterOptions, ...users };
+  }
+
+  return selectUsersResponse(await getDashboardAnalytics(filters));
+}
+
+export async function getTrendsDashboardData(filters: DashboardQueryFilters): Promise<TrendsApiResponse> {
+  if (dataSource === "sql") {
+    if (!hasActiveDashboardFilters(filters)) {
+      return selectTrendsResponse(await getBaseDashboardAnalyticsSql());
+    }
+
+    const [filterOptions, combinedTrends] = await Promise.all([
+      getSqlFilterOptions(),
+      getCachedFilteredMetrics("trends", filters, async () => {
+        const [monthlyUsageTrend, trends] = await Promise.all([
+          getMonthlyUsageTrendFromSql(filters),
+          getTrendsMetricsFromSql(filters)
+        ]);
+        return { monthlyUsageTrend, ...trends };
+      })
+    ]);
+    return { filterOptions, ...combinedTrends };
+  }
+
+  return selectTrendsResponse(await getDashboardAnalytics(filters));
+}
+
+export async function getSearchesDashboardData(filters: DashboardQueryFilters): Promise<SearchesApiResponse> {
+  if (dataSource === "sql") {
+    if (!hasActiveDashboardFilters(filters)) {
+      return selectSearchesResponse(await getBaseDashboardAnalyticsSql());
+    }
+
+    const [filterOptions, searches] = await Promise.all([
+      getSqlFilterOptions(),
+      getCachedFilteredMetrics("searches", filters, () => getSearchesMetricsFromSql(filters))
+    ]);
+    return { filterOptions, ...searches };
+  }
+
+  return selectSearchesResponse(await getDashboardAnalytics(filters));
+}
+
+export async function getMonitoringDashboardData(filters: DashboardQueryFilters): Promise<MonitoringApiResponse> {
+  if (dataSource === "sql") {
+    if (!hasActiveDashboardFilters(filters)) {
+      return selectMonitoringResponse(await getBaseDashboardAnalyticsSql());
+    }
+
+    const [filterOptions, monitoring] = await Promise.all([
+      getSqlFilterOptions(),
+      getCachedFilteredMetrics("monitoring", filters, () => getMonitoringMetricsFromSql(filters))
+    ]);
+    return { filterOptions, ...monitoring };
+  }
+
+  return selectMonitoringResponse(await getDashboardAnalytics(filters));
+}
+
 async function getBaseDashboardAnalytics(): Promise<DashboardAnalytics> {
   if (!cachedBaseAnalyticsPromise) {
     cachedBaseAnalyticsPromise = buildBaseDashboardAnalytics().catch((error) => {
@@ -109,7 +394,6 @@ async function getBaseDashboardAnalytics(): Promise<DashboardAnalytics> {
 }
 
 async function buildBaseDashboardAnalytics(): Promise<DashboardAnalytics> {
-  await access(csvFilePath);
   const [datasetCache, cachedAnalytics] = await Promise.all([
     getDatasetCache(),
     readAnalyticsFromPersistentCache()
@@ -118,23 +402,23 @@ async function buildBaseDashboardAnalytics(): Promise<DashboardAnalytics> {
   if (
     cachedAnalytics &&
     cachedAnalytics.cacheSchemaVersion === analyticsCacheSchemaVersion &&
-    cachedAnalytics.csvLastModifiedTimeMs === datasetCache.csvLastModifiedTimeMs &&
+    cachedAnalytics.datasetVersion === datasetCache.datasetVersion &&
     isDashboardAnalyticsCacheComplete(cachedAnalytics.dashboardAnalytics)
   ) {
     return cachedAnalytics.dashboardAnalytics;
   }
 
   const dashboardAnalytics = aggregateDashboardAnalytics(datasetCache.records);
-  await writeAnalyticsToPersistentCache(datasetCache.csvLastModifiedTimeMs, dashboardAnalytics);
+  await writeAnalyticsToPersistentCache(datasetCache.datasetVersion, dashboardAnalytics);
 
   return dashboardAnalytics;
 }
 
 async function getDatasetCache(): Promise<DatasetCache> {
-  const csvFileStats = await stat(csvFilePath);
+  const currentDatasetVersion = await getCurrentDatasetVersion();
 
   if (!cachedDatasetPromise) {
-    cachedDatasetPromise = buildDatasetCache(csvFileStats.mtimeMs).catch((error) => {
+    cachedDatasetPromise = buildDatasetCache(currentDatasetVersion).catch((error) => {
       cachedDatasetPromise = null;
       throw error;
     });
@@ -143,11 +427,11 @@ async function getDatasetCache(): Promise<DatasetCache> {
 
   const cachedDataset = await cachedDatasetPromise;
 
-  if (cachedDataset.csvLastModifiedTimeMs === csvFileStats.mtimeMs) {
+  if (cachedDataset.datasetVersion === currentDatasetVersion) {
     return cachedDataset;
   }
 
-  cachedDatasetPromise = buildDatasetCache(csvFileStats.mtimeMs).catch((error) => {
+  cachedDatasetPromise = buildDatasetCache(currentDatasetVersion).catch((error) => {
     cachedDatasetPromise = null;
     throw error;
   });
@@ -155,11 +439,30 @@ async function getDatasetCache(): Promise<DatasetCache> {
   return cachedDatasetPromise;
 }
 
-async function buildDatasetCache(csvLastModifiedTimeMs: number): Promise<DatasetCache> {
+async function getCurrentDatasetVersion(): Promise<string> {
+  if (dataSource === "sql") {
+    const pool = await getSqlPool();
+    const result = await pool
+      .request()
+      .query(
+        `SELECT CONVERT(varchar(33), MAX(fecha_fin_ejecucion), 126) AS lastLoadTimestamp
+         FROM dbbibliotecas.ETL_Control_Carga
+         WHERE estado = 'OK'`
+      );
+
+    const lastLoadTimestamp = result.recordset[0]?.lastLoadTimestamp;
+    return lastLoadTimestamp ? String(lastLoadTimestamp) : "sin-carga-etl";
+  }
+
+  const csvFileStats = await stat(csvFilePath);
+  return String(csvFileStats.mtimeMs);
+}
+
+async function buildDatasetCache(datasetVersion: string): Promise<DatasetCache> {
   const records = await readCsvRecords(csvFilePath);
 
   return {
-    csvLastModifiedTimeMs,
+    datasetVersion,
     records
   };
 }
@@ -373,43 +676,6 @@ function matchesFilterValues(value: string, selectedValues: string[]): boolean {
   return selectedValues.length === 0 || selectedValues.includes(value);
 }
 
-function buildSummaryKpis(
-  totalEvents: number,
-  uniqueUsersCount: number,
-  totalSearches: number,
-  totalResourceAccesses: number
-): KpiMetric[] {
-  const averageEventsPerUser = uniqueUsersCount === 0 ? 0 : totalEvents / uniqueUsersCount;
-
-  return [
-    {
-      label: "Total de interacciones con las bibliotecas",
-      value: formatInteger(totalEvents),
-      supportingText: "Interacción de los usuarios con las bibliotecas digitales."
-    },
-    {
-      label: "Usuarios unicos",
-      value: formatInteger(uniqueUsersCount),
-      supportingText: "Personas diferentes con actividad registrada"
-    },
-    {
-      label: "Total de busquedas",
-      value: formatInteger(totalSearches),
-      supportingText: "Consultas realizadas dentro del ecosistema digital"
-    },
-    {
-      label: "Promedio de eventos por usuario",
-      value: formatDecimal(averageEventsPerUser),
-      supportingText: "Mide la intensidad general de uso"
-    },
-    {
-      label: "Total de accesos a bibliotecas",
-      value: formatInteger(totalResourceAccesses),
-      supportingText: "Consultas efectivas realizadas mediante URL"
-    }
-  ];
-}
-
 async function readCsvRecords(filePath: string): Promise<LibraryUsageRecord[]> {
   const fileContent = await readFile(filePath, "utf-8");
   const rawLines = fileContent.split(/\r?\n/).filter((line) => line.trim().length > 0);
@@ -428,32 +694,36 @@ async function readCsvRecords(filePath: string): Promise<LibraryUsageRecord[]> {
       headerColumns.map((columnName, index) => [columnName, columns[index] ?? ""])
     );
 
-    const year = sanitizeField(recordByHeader.anio ?? "");
-    const month = sanitizeMonth(recordByHeader.mes ?? "");
-    const monthLabel = monthLabelByNumber.get(month) ?? "";
-    const identification = sanitizeField(recordByHeader.identificacion ?? "");
-    const fullName = sanitizeField(recordByHeader.nombre ?? "");
-
-    return {
-      fecha: sanitizeField(recordByHeader.fecha ?? ""),
-      identificacion: identification,
-      nombre: fullName,
-      cargo: sanitizeField(recordByHeader.cargo ?? "", "SIN CARGO"),
-      carrera: sanitizeField(recordByHeader.carrera ?? "", "SIN CARRERA"),
-      modalidad: sanitizeField(recordByHeader.modalidad ?? "", "SIN MODALIDAD"),
-      tipoAcceso: sanitizeField(recordByHeader.tipo_acceso ?? "", "SIN TIPO DE ACCESO"),
-      ua: sanitizeField(recordByHeader.ua ?? "", "SIN UNIDAD ACADEMICA"),
-      sede: sanitizeField(recordByHeader.sede ?? "", "SIN SEDE"),
-      operacion: sanitizeField(recordByHeader.operacion ?? "", "SIN OPERACION"),
-      busqueda: sanitizeField(recordByHeader.busqueda ?? ""),
-      recurso: sanitizeField(recordByHeader.recurso ?? "", "SIN RECURSO"),
-      tipoRecurso: sanitizeField(recordByHeader.tiporecurso ?? "", "SIN TIPO DE RECURSO"),
-      anio: year,
-      mes: month,
-      monthLabel,
-      userLabel: identification && fullName ? `${identification} - ${fullName}` : identification
-    };
+    return buildLibraryUsageRecordFromRawFields(recordByHeader);
   });
+}
+
+function buildLibraryUsageRecordFromRawFields(recordByHeader: Record<string, string>): LibraryUsageRecord {
+  const year = sanitizeField(recordByHeader.anio ?? "");
+  const month = sanitizeMonth(recordByHeader.mes ?? "");
+  const monthLabel = monthLabelByNumber.get(month) ?? "";
+  const identification = sanitizeField(recordByHeader.identificacion ?? "");
+  const fullName = sanitizeField(recordByHeader.nombre ?? "");
+
+  return {
+    fecha: sanitizeField(recordByHeader.fecha ?? ""),
+    identificacion: identification,
+    nombre: fullName,
+    cargo: sanitizeField(recordByHeader.cargo ?? "", "SIN CARGO"),
+    carrera: sanitizeField(recordByHeader.carrera ?? "", "SIN CARRERA"),
+    modalidad: sanitizeField(recordByHeader.modalidad ?? "", "SIN MODALIDAD"),
+    tipoAcceso: sanitizeField(recordByHeader.tipo_acceso ?? "", "SIN TIPO DE ACCESO"),
+    ua: sanitizeField(recordByHeader.ua ?? "", "SIN UNIDAD ACADEMICA"),
+    sede: sanitizeField(recordByHeader.sede ?? "", "SIN SEDE"),
+    operacion: sanitizeField(recordByHeader.operacion ?? "", "SIN OPERACION"),
+    busqueda: sanitizeField(recordByHeader.busqueda ?? ""),
+    recurso: sanitizeField(recordByHeader.recurso ?? "", "SIN RECURSO"),
+    tipoRecurso: sanitizeField(recordByHeader.tiporecurso ?? "", "SIN TIPO DE RECURSO"),
+    anio: year,
+    mes: month,
+    monthLabel,
+    userLabel: identification && fullName ? `${identification} - ${fullName}` : identification
+  };
 }
 
 function splitDelimitedLine(line: string, delimiter: string): string[] {
@@ -515,79 +785,6 @@ function normalizeSearchTerm(searchTerm: string): string {
   return sanitizedSearchTerm.toLowerCase();
 }
 
-function incrementMapCounter(counterMap: Map<string, number>, key: string): void {
-  counterMap.set(key, (counterMap.get(key) ?? 0) + 1);
-}
-
-function addToSetMap(setMap: Map<string, Set<string>>, key: string, value: string): void {
-  if (!key || !value) {
-    return;
-  }
-
-  const valueSet = setMap.get(key) ?? new Set<string>();
-  valueSet.add(value);
-  setMap.set(key, valueSet);
-}
-
-function sortByCountThenLabel(counterMap: Map<string, number>): CategoryMetric[] {
-  return [...counterMap.entries()]
-    .map(([label, value]) => ({ label, value }))
-    .sort((leftItem, rightItem) => {
-      if (rightItem.value !== leftItem.value) {
-        return rightItem.value - leftItem.value;
-      }
-
-      return leftItem.label.localeCompare(rightItem.label, "es");
-    });
-}
-
-function sortMonthlyMetrics(counterMap: Map<string, number>): MonthlyMetric[] {
-  return [...counterMap.entries()]
-    .map(([month, value]) => ({ month, value }))
-    .sort((leftItem, rightItem) => leftItem.month.localeCompare(rightItem.month, "es"));
-}
-
-function sortOperationTrendMetrics(counterMap: Map<string, OperationTrendMetric>): OperationTrendMetric[] {
-  return [...counterMap.values()].sort((leftItem, rightItem) =>
-    leftItem.month.localeCompare(rightItem.month, "es")
-  );
-}
-
-function sortOperationYearMetrics(counterMap: Map<string, OperationYearMetric>): OperationYearMetric[] {
-  return [...counterMap.values()].sort((leftItem, rightItem) =>
-    leftItem.year.localeCompare(rightItem.year, "es")
-  );
-}
-
-function buildUniqueUserMetrics(uniqueValuesMap: Map<string, Set<string>>): CategoryMetric[] {
-  return [...uniqueValuesMap.entries()]
-    .map(([label, values]) => ({
-      label,
-      value: values.size
-    }))
-    .sort((leftItem, rightItem) => {
-      if (rightItem.value !== leftItem.value) {
-        return rightItem.value - leftItem.value;
-      }
-
-      return leftItem.label.localeCompare(rightItem.label, "es");
-    });
-}
-
-function buildAcademicUnitScatterMetrics(
-  usageByAcademicUnit: Map<string, number>,
-  uniqueUsersByAcademicUnit: Map<string, Set<string>>
-): ScatterMetric[] {
-  return [...usageByAcademicUnit.entries()]
-    .map(([academicUnit, eventCount]) => ({
-      name: academicUnit,
-      events: eventCount,
-      users: (uniqueUsersByAcademicUnit.get(academicUnit) ?? new Set<string>()).size
-    }))
-    .sort((leftItem, rightItem) => rightItem.events - leftItem.events)
-    .slice(0, 12);
-}
-
 function buildMonitoringUsers(userAccumulators: Map<string, UserAccumulator>): UserMonitoringRow[] {
   return [...userAccumulators.values()]
     .sort((leftUser, rightUser) => rightUser.totalEvents - leftUser.totalEvents)
@@ -605,23 +802,6 @@ function buildMonitoringUsers(userAccumulators: Map<string, UserAccumulator>): U
       firstUsageDate: user.firstUsageDate,
       lastUsageDate: user.lastUsageDate
     }));
-}
-
-function buildResourceUsageByPrimaryRoles(
-  resourceUsageByRole: Map<string, ResourceUsageByRoleMetric>
-): ResourceUsageByRoleMetric[] {
-  return [...resourceUsageByRole.values()]
-    .sort((leftItem, rightItem) => {
-      const leftTotal = leftItem.student + leftItem.teacher;
-      const rightTotal = rightItem.student + rightItem.teacher;
-
-      if (rightTotal !== leftTotal) {
-        return rightTotal - leftTotal;
-      }
-
-      return leftItem.resource.localeCompare(rightItem.resource, "es");
-    })
-    .slice(0, 10);
 }
 
 function buildUserOptions(userAccumulators: Map<string, UserAccumulator>): string[] {
@@ -679,72 +859,21 @@ function accumulateUserUsage(
   userAccumulators.set(userEvent.identification, existingAccumulator);
 }
 
-function takeTop<TItem>(items: TItem[], topCount: number): TItem[] {
-  return items.slice(0, topCount);
-}
-
-function takeBottom<TItem extends CategoryMetric>(items: TItem[], bottomCount: number): TItem[] {
-  return [...items]
-    .filter((item) => item.label !== "SIN RECURSO")
-    .reverse()
-    .slice(0, bottomCount)
-    .reverse();
-}
-
-function sortLexicographically(values: string[]): string[] {
-  return [...values].sort((leftValue, rightValue) => leftValue.localeCompare(rightValue, "es"));
-}
-
-function sortMapLabelsAlphabetically(counterMap: Map<string, number>): string[] {
-  return sortLexicographically([...counterMap.keys()]);
-}
-
-function addOption(optionSet: Set<string>, value: string): void {
-  if (value) {
-    optionSet.add(value);
-  }
-}
-
-function accumulateResourceUsageByPrimaryRole(
-  resourceUsageByRole: Map<string, ResourceUsageByRoleMetric>,
-  resource: string,
-  role: string
-): void {
-  if (!resource || resource === "SIN RECURSO") {
-    return;
-  }
-
-  if (role !== "ALUMNO" && role !== "DOCENTE") {
-    return;
-  }
-
-  const currentMetric = resourceUsageByRole.get(resource) ?? {
-    resource,
-    student: 0,
-    teacher: 0
-  };
-
-  if (role === "ALUMNO") {
-    currentMetric.student += 1;
-  }
-
-  if (role === "DOCENTE") {
-    currentMetric.teacher += 1;
-  }
-
-  resourceUsageByRole.set(resource, currentMetric);
-}
-
 async function readAnalyticsFromPersistentCache(): Promise<{
   cacheSchemaVersion: number;
-  csvLastModifiedTimeMs: number;
+  datasetVersion: string;
   dashboardAnalytics: DashboardAnalytics;
 } | null> {
   try {
-    const cacheFileContent = await readFile(analyticsCacheFilePath, "utf-8");
-    return JSON.parse(cacheFileContent) as {
+    const cachedValue = await getRedisClient().get(analyticsCacheRedisKey);
+
+    if (!cachedValue) {
+      return null;
+    }
+
+    return JSON.parse(cachedValue) as {
       cacheSchemaVersion: number;
-      csvLastModifiedTimeMs: number;
+      datasetVersion: string;
       dashboardAnalytics: DashboardAnalytics;
     };
   } catch {
@@ -753,18 +882,16 @@ async function readAnalyticsFromPersistentCache(): Promise<{
 }
 
 async function writeAnalyticsToPersistentCache(
-  csvLastModifiedTimeMs: number,
+  datasetVersion: string,
   dashboardAnalytics: DashboardAnalytics
 ): Promise<void> {
-  await mkdir(analyticsCacheDirectoryPath, { recursive: true });
-  await writeFile(
-    analyticsCacheFilePath,
+  await getRedisClient().set(
+    analyticsCacheRedisKey,
     JSON.stringify({
       cacheSchemaVersion: analyticsCacheSchemaVersion,
-      csvLastModifiedTimeMs,
+      datasetVersion,
       dashboardAnalytics
-    }),
-    "utf-8"
+    })
   );
 }
 

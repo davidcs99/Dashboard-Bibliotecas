@@ -21,7 +21,7 @@ if [ ! -f "$DATA_FILE" ]; then
 fi
 
 echo "Creando directorio remoto si no existe..."
-ssh -p "$SSH_PORT" "$USER@$SERVER" "mkdir -p '$REMOTE_PATH/.cache'"
+ssh -p "$SSH_PORT" "$USER@$SERVER" "mkdir -p '$REMOTE_PATH'"
 
 echo "Transfiriendo archivos al servidor..."
 rsync -avz \
@@ -31,7 +31,6 @@ rsync -avz \
   --exclude 'dist' \
   --exclude '.git' \
   --exclude '.gitignore' \
-  --exclude '.cache' \
   . "$USER@$SERVER:$REMOTE_PATH"
 
 echo "Conectando al servidor para construir y ejecutar..."
@@ -51,22 +50,35 @@ ssh -p "$SSH_PORT" "$USER@$SERVER" \
     exit 1
   fi
 
-  mkdir -p .cache
-
   echo "Building Docker image..."
   if ! docker build --network=host -t "$IMAGE_NAME" .; then
     echo "Error: Docker build failed. Network issue possible."
     exit 1
   fi
 
+  echo "Checking existing tunnel..."
+  TUNNEL_RUNNING=false
+  if [ "$(docker inspect -f '{{.State.Running}}' "$TUNNEL_CONTAINER_NAME" 2>/dev/null || true)" = "true" ]; then
+    TUNNEL_RUNNING=true
+    echo "El tunel existente ($TUNNEL_CONTAINER_NAME) esta corriendo; se reutiliza (misma URL)."
+  else
+    echo "No hay tunel corriendo; se levantara junto con el resto del stack."
+  fi
+
   echo "Starting application with $COMPOSE_FILE..."
   if docker compose version >/dev/null 2>&1; then
-    docker compose -f "$COMPOSE_FILE" down --remove-orphans || true
-    docker compose -f "$COMPOSE_FILE" up -d
+    if [ "$TUNNEL_RUNNING" = "true" ]; then
+      docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate dashboard-app
+    else
+      docker compose -f "$COMPOSE_FILE" up -d
+    fi
     docker compose -f "$COMPOSE_FILE" ps
   elif command -v docker-compose >/dev/null 2>&1; then
-    docker-compose -f "$COMPOSE_FILE" down --remove-orphans || true
-    docker-compose -f "$COMPOSE_FILE" up -d
+    if [ "$TUNNEL_RUNNING" = "true" ]; then
+      docker-compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate dashboard-app
+    else
+      docker-compose -f "$COMPOSE_FILE" up -d
+    fi
     docker-compose -f "$COMPOSE_FILE" ps
   else
     echo "Error: 'docker compose' ni 'docker-compose' estan instalados."

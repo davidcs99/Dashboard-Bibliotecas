@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { getDashboardAnalytics } from "@/lib/server/dashboard-analytics-service";
-import { selectFiltersResponse } from "@/lib/server/dashboard-api-selectors";
+import { getFiltersDashboardData } from "@/lib/server/dashboard-analytics-service";
 
 export async function GET() {
-  const dashboardAnalytics = await getDashboardAnalytics();
-  return NextResponse.json(selectFiltersResponse(dashboardAnalytics));
+  return NextResponse.json(await getFiltersDashboardData());
 }

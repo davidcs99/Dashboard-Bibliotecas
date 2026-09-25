@@ -4,12 +4,15 @@ services:
     image: dashboard-bibliotecas-app:latest
     ports:
       - "3001:3000"
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
     volumes:
       - ./biblio_datos_limpios.csv:/app/biblio_datos_limpios.csv:ro
+      - redis-data:/app/redis-data
     restart: unless-stopped
 
   tunnel:
@@ -20,3 +23,6 @@ services:
     restart: unless-stopped
     depends_on:
       - dashboard-app
+
+volumes:
+  redis-data:
